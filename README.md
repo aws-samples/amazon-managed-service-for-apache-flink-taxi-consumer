@@ -1,17 +1,20 @@
-## My Project
+## Amazon Managed Service for Apache Flink - Taxi Consumer
 
-TODO: Fill this README out!
+Sample Apache Flink application that can be deployed to [Amazon Managed Service for Apache Flink](https://aws.amazon.com/managed-service-apache-flink/) 
+(formerly known as Amazon Kinesis Data Analytics). 
 
-Be sure to:
+The application reads taxi events from a Kinesis data stream, processes and aggregates them, and ingests the result to an 
+Amazon OpenSearch Service cluster for visualization with Kibana.
 
-* Change the title in this README
-* Edit your repository description on GitHub
+### Data generator
 
-## Security
+This example application expects a dataset that can be published into a Kinesis Data Stream using 
+[Kinesis Data Replay](https://github.com/aws-samples/amazon-kinesis-replay).
 
-See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more information.
+By default, [Kinesis Data Replay](https://github.com/aws-samples/amazon-kinesis-replay) publishes a historic data set of 
+taxi trips that made in New York City into a Kinesis Data Stream.
+Data are based on a public dataset, also [available from the Registry of Open Data on AWS](https://registry.opendata.aws/nyc-tlc-trip-records-pds/).
 
 ## License
 
-This project is licensed under the Apache-2.0 License.
-
+This sample is licensed under the Apache 2.0 License.

@@ -1,0 +1,5 @@
+.idea
+target/
+.run
+dependency-reduced-pom.xml
+.DS_Store
