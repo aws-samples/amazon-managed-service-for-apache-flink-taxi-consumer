@@ -18,7 +18,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.amazonaws.samples.msf</groupId>
-    <artifactId>flink-taxi-consumer</artifactId>
+    <artifactId>amazon-managed-service-for-apache-flink-taxi-consumer</artifactId>
     <version>1.0-SNAPSHOT</version>
     <name>Amazon Managed Service for Apache Flink - Taxi Consumer</name>
     <packaging>jar</packaging>
