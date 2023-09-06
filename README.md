@@ -15,7 +15,7 @@ By default, [Kinesis Data Replay](https://github.com/aws-samples/amazon-kinesis-
 taxi trips that made in New York City into a Kinesis Data Stream.
 Data are based on a public dataset, also [available from the Registry of Open Data on AWS](https://registry.opendata.aws/nyc-tlc-trip-records-pds/).
 
-## Full workshop
+## Amazon Managed Service for Apache Flink workshop
 
 An end-to-end workshop, to learn how to modify and build this Flink application, deploy it on Amazon Managed Service for Apache Flink, 
 and visualize the result in a dashboard, is available on [AWS Workshop Studio](https://catalog.us-east-1.prod.workshops.aws/workshops/2437ee74-38ed-4817-94b9-45b920cb168a).

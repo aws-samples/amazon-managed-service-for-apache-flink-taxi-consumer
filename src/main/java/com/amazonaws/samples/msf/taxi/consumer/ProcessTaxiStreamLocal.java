@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2023 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"). You may
  * not use this file except in compliance with the License. A copy of the
@@ -35,7 +35,7 @@ import java.util.Properties;
 public class ProcessTaxiStreamLocal {
   private static final Logger LOG = LoggerFactory.getLogger(ProcessTaxiStreamLocal.class);
 
-  private static final String DEFAULT_STREAM_NAME = "msf-immersion-day";
+  private static final String DEFAULT_STREAM_NAME = "managed-flink-workshop";
   private static final String DEFAULT_REGION_NAME = Regions.getCurrentRegion()==null ? "us-east-1" : Regions.getCurrentRegion().getName();
 
 
