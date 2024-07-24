@@ -15,7 +15,6 @@
 
 package com.amazonaws.samples.msf.taxi.consumer;
 
-import com.amazonaws.regions.Regions;
 import com.amazonaws.samples.msf.taxi.consumer.events.EventDeserializationSchema;
 import com.amazonaws.samples.msf.taxi.consumer.events.TimestampAssigner;
 import com.amazonaws.samples.msf.taxi.consumer.events.es.AverageTripDuration;
@@ -30,6 +29,8 @@ import com.amazonaws.services.kinesisanalytics.runtime.KinesisAnalyticsRuntime;
 import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.utils.ParameterTool;
+import org.apache.flink.connector.opensearch.sink.RestClientFactory;
+import org.apache.flink.kinesis.shaded.com.amazonaws.regions.Regions;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.LocalStreamEnvironment;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
@@ -47,110 +48,111 @@ import java.util.Properties;
 
 
 public class ProcessTaxiStream {
-  private static final Logger LOG = LoggerFactory.getLogger(ProcessTaxiStream.class);
+    private static final Logger LOG = LoggerFactory.getLogger(ProcessTaxiStream.class);
 
-  private static final String DEFAULT_STREAM_NAME = "managed-flink-workshop";
-  private static final String DEFAULT_REGION_NAME = Regions.getCurrentRegion()==null ? "us-east-1" : Regions.getCurrentRegion().getName();
-
-
-  public static void main(String[] args) throws Exception {
-    StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+    private static final String DEFAULT_STREAM_NAME = "managed-flink-workshop";
+    private static final String DEFAULT_REGION_NAME = Regions.getCurrentRegion() == null ? "us-east-1" : Regions.getCurrentRegion().getName();
 
 
-    ParameterTool parameter;
+    public static void main(String[] args) throws Exception {
+        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
-    if (env instanceof LocalStreamEnvironment) {
-      //read the parameters specified from the command line
-      parameter = ParameterTool.fromArgs(args);
-    } else {
-      //read the parameters from the Kinesis Analytics environment
-      Map<String, Properties> applicationProperties = KinesisAnalyticsRuntime.getApplicationProperties();
 
-      Properties flinkProperties = applicationProperties.get("FlinkApplicationProperties");
+        ParameterTool parameter;
 
-      if (flinkProperties == null) {
-        throw new RuntimeException("Unable to load FlinkApplicationProperties properties from the MSF (Kinesis Analytics) runtime.");
-      }
+        if (env instanceof LocalStreamEnvironment) {
+            // read the parameters specified from the command line
+            parameter = ParameterTool.fromArgs(args);
+        } else {
+            // read the parameters from the Kinesis Analytics environment
+            Map<String, Properties> applicationProperties = KinesisAnalyticsRuntime.getApplicationProperties();
 
-      parameter = ParameterToolUtils.fromApplicationProperties(flinkProperties);
+            Properties flinkProperties = applicationProperties.get("FlinkApplicationProperties");
+
+            if (flinkProperties == null) {
+                throw new RuntimeException("Unable to load FlinkApplicationProperties properties from the MSF (Kinesis Analytics) runtime.");
+            }
+
+            parameter = ParameterToolUtils.fromApplicationProperties(flinkProperties);
+        }
+
+
+        // set Kinesis consumer properties
+        Properties kinesisConsumerConfig = new Properties();
+        // set the region the Kinesis stream is located in
+        kinesisConsumerConfig.setProperty(AWSConfigConstants.AWS_REGION, parameter.get("Region", DEFAULT_REGION_NAME));
+        // obtain credentials through the DefaultCredentialsProviderChain, which includes the instance metadata
+        kinesisConsumerConfig.setProperty(AWSConfigConstants.AWS_CREDENTIALS_PROVIDER, "AUTO");
+        // poll new events from the Kinesis stream once every second
+        kinesisConsumerConfig.setProperty(ConsumerConfigConstants.SHARD_GETRECORDS_INTERVAL_MILLIS, "1000");
+
+
+        // create Kinesis source
+        DataStream<Event> kinesisStream = env.addSource(new FlinkKinesisConsumer<>(
+                // read events from the Kinesis stream passed in as a parameter
+                parameter.get("InputStreamName", DEFAULT_STREAM_NAME),
+                // deserialize events with EventSchema
+                new EventDeserializationSchema(),
+                // using the previously defined properties
+                kinesisConsumerConfig
+        ));
+
+
+        DataStream<TripEvent> trips = kinesisStream
+                // extract watermarks from watermark events
+                .assignTimestampsAndWatermarks(new AssignerWithPunctuatedWatermarksAdapter.Strategy<>(new TimestampAssigner()))
+                // remove all events that aren't TripEvents
+                .filter(event -> TripEvent.class.isAssignableFrom(event.getClass()))
+                // cast Event to TripEvent
+                .map(event -> (TripEvent) event)
+                // remove all events with geo coordinates outside of NYC
+                .filter(GeoUtils::hasValidCoordinates);
+
+
+        DataStream<PickupCount> pickupCounts = trips
+                // (1) compute geo hash for every event
+                .map(new TripToGeoHash())
+                // (2) partition by geo hash
+                .keyBy(item -> item.geoHash)
+                // (3) collect all events in a one hour window
+                .window(TumblingEventTimeWindows.of(Time.hours(1)))
+                // (4) count events per geo hash in the one hour window
+                .apply(new CountByGeoHash());
+
+
+        DataStream<AverageTripDuration> tripDurations = trips
+                // (1) trips to trip durations, only retaining trips to the airports
+                .flatMap(new TripToTripDuration())
+                // (2) partition by pickup location geo hash and destination airport
+                .keyBy(new KeySelector<TripDuration, Tuple2<String, String>>() {
+                    @Override
+                    public Tuple2<String, String> getKey(TripDuration item) throws Exception {
+                        return Tuple2.of(item.pickupGeoHash, item.airportCode);
+                    }
+                })
+                //(3) collect all trip durations in the one hour window
+                .window(TumblingEventTimeWindows.of(Time.hours(1)))
+                //(4) calculate average trip duration, per pickup geo hash and destination airport, in the one hour window
+                .apply(new TripDurationToAverageTripDuration());
+
+
+        // create OpenSearch sink
+        if (parameter.has("OpenSearchEndpoint")) {
+            String opensearchEndpoint = parameter.get("OpenSearchEndpoint");
+            final String region = parameter.get("Region", DEFAULT_REGION_NAME);
+
+            RestClientFactory osRestClientFactory = AmazonOpenSearchServiceSink.createAmazonOpenSearchSigningRestClientFactory(region);
+
+            // creates 2 sinks, one per OpenSearch index
+            pickupCounts.sinkTo(AmazonOpenSearchServiceSink.buildAmazonOpenSearchSink("pickup_count", opensearchEndpoint, osRestClientFactory));
+            tripDurations.sinkTo(AmazonOpenSearchServiceSink.buildAmazonOpenSearchSink("trip_duration", opensearchEndpoint, osRestClientFactory));
+        }
+
+
+        LOG.info("Reading events from stream {}", parameter.get("InputStreamName", DEFAULT_STREAM_NAME));
+
+        env.execute();
     }
 
 
-    //set Kinesis consumer properties
-    Properties kinesisConsumerConfig = new Properties();
-    //set the region the Kinesis stream is located in
-    kinesisConsumerConfig.setProperty(AWSConfigConstants.AWS_REGION, parameter.get("Region", DEFAULT_REGION_NAME));
-    //obtain credentials through the DefaultCredentialsProviderChain, which includes the instance metadata
-    kinesisConsumerConfig.setProperty(AWSConfigConstants.AWS_CREDENTIALS_PROVIDER, "AUTO");
-    //poll new events from the Kinesis stream once every second
-    kinesisConsumerConfig.setProperty(ConsumerConfigConstants.SHARD_GETRECORDS_INTERVAL_MILLIS, "1000");
-
-
-    //create Kinesis source
-    DataStream<Event> kinesisStream = env.addSource(new FlinkKinesisConsumer<>(
-        //read events from the Kinesis stream passed in as a parameter
-        parameter.get("InputStreamName", DEFAULT_STREAM_NAME),
-        //deserialize events with EventSchema
-        new EventDeserializationSchema(),
-        //using the previously defined properties
-        kinesisConsumerConfig
-    ));
-
-
-    DataStream<TripEvent> trips = kinesisStream
-        //extract watermarks from watermark events
-        .assignTimestampsAndWatermarks(new AssignerWithPunctuatedWatermarksAdapter.Strategy<>(new TimestampAssigner()))
-        //remove all events that aren't TripEvents
-        .filter(event -> TripEvent.class.isAssignableFrom(event.getClass()))
-        //cast Event to TripEvent
-        .map(event -> (TripEvent) event)
-        //remove all events with geo coordinates outside of NYC
-        .filter(GeoUtils::hasValidCoordinates);
-
-
-    DataStream<PickupCount> pickupCounts = trips
-        //(1) compute geo hash for every event
-        .map(new TripToGeoHash())
-        //(2) partition by geo hash
-        .keyBy(item -> item.geoHash)
-        //(3) collect all events in a one hour window
-        .window(TumblingEventTimeWindows.of(Time.hours(1)))
-        //(4) count events per geo hash in the one hour window
-        .apply(new CountByGeoHash());
-
-
-    DataStream<AverageTripDuration> tripDurations = trips
-        //(1) trips to trip durations, only retaining trips to the airports
-        .flatMap(new TripToTripDuration())
-        //(2) partition by pickup location geo hash and destination airport
-        .keyBy(new KeySelector<TripDuration, Tuple2<String, String>>() {
-          @Override
-          public Tuple2<String, String> getKey(TripDuration item) throws Exception {
-            return Tuple2.of(item.pickupGeoHash, item.airportCode);
-          }
-        })
-        //(3) collect all trip durations in the one hour window
-        .window(TumblingEventTimeWindows.of(Time.hours(1)))
-        //(4) calculate average trip duration, per pickup geo hash and destination airport, in the one hour window
-        .apply(new TripDurationToAverageTripDuration());
-
-
-    if (parameter.has("OpenSearchEndpoint")) {
-      String opensearchEndpoint = parameter.get("OpenSearchEndpoint");
-      final String region = parameter.get("Region", DEFAULT_REGION_NAME);
-
-      //remove trailing /
-      if (opensearchEndpoint.endsWith(("/"))) {
-        opensearchEndpoint = opensearchEndpoint.substring(0, opensearchEndpoint.length()-1);
-      }
-
-      pickupCounts.addSink(AmazonElasticsearchSink.buildElasticsearchSink(opensearchEndpoint, region, "pickup_count", "_doc"));
-      tripDurations.addSink(AmazonElasticsearchSink.buildElasticsearchSink(opensearchEndpoint, region, "trip_duration", "_doc"));
-    }
-
-
-    LOG.info("Reading events from stream {}", parameter.get("InputStreamName", DEFAULT_STREAM_NAME));
-
-    env.execute();
-  }
 }
