@@ -51,7 +51,7 @@ public class ProcessTaxiStream {
     private static final Logger LOG = LoggerFactory.getLogger(ProcessTaxiStream.class);
 
     private static final String DEFAULT_STREAM_NAME = "managed-flink-workshop";
-    private static final String DEFAULT_REGION_NAME = Regions.getCurrentRegion() == null ? "us-east-1" : Regions.getCurrentRegion().getName();
+    private static final String DEFAULT_REGION_NAME = Regions.getCurrentRegion() == null ? "us-west-1" : Regions.getCurrentRegion().getName();
 
 
     public static void main(String[] args) throws Exception {
@@ -77,35 +77,35 @@ public class ProcessTaxiStream {
         }
 
 
-        // set Kinesis consumer properties
+        // Set Kinesis consumer properties
         Properties kinesisConsumerConfig = new Properties();
-        // set the region the Kinesis stream is located in
+        // Set the region the Kinesis stream is located in
         kinesisConsumerConfig.setProperty(AWSConfigConstants.AWS_REGION, parameter.get("Region", DEFAULT_REGION_NAME));
-        // obtain credentials through the DefaultCredentialsProviderChain, which includes the instance metadata
+        // Obtain credentials through the DefaultCredentialsProviderChain, which includes the instance metadata
         kinesisConsumerConfig.setProperty(AWSConfigConstants.AWS_CREDENTIALS_PROVIDER, "AUTO");
-        // poll new events from the Kinesis stream once every second
+        // Poll new events from the Kinesis stream once every second
         kinesisConsumerConfig.setProperty(ConsumerConfigConstants.SHARD_GETRECORDS_INTERVAL_MILLIS, "1000");
 
 
-        // create Kinesis source
+        // Create Kinesis source
         DataStream<Event> kinesisStream = env.addSource(new FlinkKinesisConsumer<>(
-                // read events from the Kinesis stream passed in as a parameter
+                // Read events from the Kinesis stream passed in as a parameter
                 parameter.get("InputStreamName", DEFAULT_STREAM_NAME),
-                // deserialize events with EventSchema
+                // Deserialize events with EventSchema
                 new EventDeserializationSchema(),
-                // using the previously defined properties
+                // Using the previously defined properties
                 kinesisConsumerConfig
         ));
 
 
         DataStream<TripEvent> trips = kinesisStream
-                // extract watermarks from watermark events
+                // Extract watermarks from watermark events
                 .assignTimestampsAndWatermarks(new AssignerWithPunctuatedWatermarksAdapter.Strategy<>(new TimestampAssigner()))
-                // remove all events that aren't TripEvents
+                // Remove all events that aren't TripEvents
                 .filter(event -> TripEvent.class.isAssignableFrom(event.getClass()))
-                // cast Event to TripEvent
+                // Cast Event to TripEvent
                 .map(event -> (TripEvent) event)
-                // remove all events with geo coordinates outside of NYC
+                // Remove all events with geo coordinates outside of NYC
                 .filter(GeoUtils::hasValidCoordinates);
 
 
@@ -136,14 +136,14 @@ public class ProcessTaxiStream {
                 .apply(new TripDurationToAverageTripDuration());
 
 
-        // create OpenSearch sink
+        // Create OpenSearch sink
         if (parameter.has("OpenSearchEndpoint")) {
             String opensearchEndpoint = parameter.get("OpenSearchEndpoint");
             final String region = parameter.get("Region", DEFAULT_REGION_NAME);
 
             RestClientFactory osRestClientFactory = AmazonOpenSearchServiceSink.createAmazonOpenSearchSigningRestClientFactory(region);
 
-            // creates 2 sinks, one per OpenSearch index
+            // 2x sinks, one per OpenSearch index
             pickupCounts.sinkTo(AmazonOpenSearchServiceSink.buildAmazonOpenSearchSink("pickup_count", opensearchEndpoint, osRestClientFactory));
             tripDurations.sinkTo(AmazonOpenSearchServiceSink.buildAmazonOpenSearchSink("trip_duration", opensearchEndpoint, osRestClientFactory));
         }
@@ -153,6 +153,5 @@ public class ProcessTaxiStream {
 
         env.execute();
     }
-
 
 }

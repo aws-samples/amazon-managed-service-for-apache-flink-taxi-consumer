@@ -33,7 +33,7 @@ import java.net.MalformedURLException;
 import java.net.URL;
 
 /**
- * This class wraps the creation of an OpenSearch sink writing JSON payload to Amazon OpenSearch service
+ * This class wraps the creation of an OpenSearch sink that writes JSON payload to Amazon OpenSearch service
  */
 public class AmazonOpenSearchServiceSink {
 

@@ -36,47 +36,47 @@ public class ProcessTaxiStreamLocal {
     private static final Logger LOG = LoggerFactory.getLogger(ProcessTaxiStreamLocal.class);
 
     private static final String DEFAULT_STREAM_NAME = "managed-flink-workshop";
-    private static final String DEFAULT_REGION_NAME = Regions.getCurrentRegion() == null ? "us-east-1" : Regions.getCurrentRegion().getName();
+    private static final String DEFAULT_REGION_NAME = Regions.getCurrentRegion() == null ? "us-west-1" : Regions.getCurrentRegion().getName();
 
 
     public static void main(String[] args) throws Exception {
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
 
-        //read the parameters specified from the command line
+        // Read the parameters specified from the command line
         ParameterTool parameter = ParameterTool.fromArgs(args);
 
 
         Properties kinesisConsumerConfig = new Properties();
-        //set the region the Kinesis stream is located in
+        // Set the region the Kinesis stream is located in
         kinesisConsumerConfig.setProperty(AWSConfigConstants.AWS_REGION, parameter.get("Region", DEFAULT_REGION_NAME));
-        //obtain credentials through the DefaultCredentialsProviderChain, which includes credentials from the instance metadata
+        // Obtain credentials through the DefaultCredentialsProviderChain, which includes credentials from the instance metadata
         kinesisConsumerConfig.setProperty(AWSConfigConstants.AWS_CREDENTIALS_PROVIDER, "AUTO");
-        //poll new events from the Kinesis stream once every second
+        // Poll new events from the Kinesis stream once every second
         kinesisConsumerConfig.setProperty(ConsumerConfigConstants.SHARD_GETRECORDS_INTERVAL_MILLIS, "1000");
 
 
-        //create Kinesis source
+        // Create Kinesis source
         DataStream<Event> kinesisStream = env.addSource(new FlinkKinesisConsumer<>(
-                //read events from the Kinesis stream passed in as a parameter
+                // Read events from the Kinesis stream passed in as a parameter
                 parameter.get("InputStreamName", DEFAULT_STREAM_NAME),
-                //deserialize events with EventSchema
+                // Deserialize events with EventSchema
                 new EventDeserializationSchema(),
-                //using the previously defined Kinesis consumer properties
+                // Using the previously defined Kinesis consumer properties
                 kinesisConsumerConfig
         ));
 
 
         DataStream<TripEvent> trips = kinesisStream
-                //remove all events that aren't TripEvents
+                // Remove all events that aren't TripEvents
                 .filter(event -> TripEvent.class.isAssignableFrom(event.getClass()))
-                //cast Event to TripEvent
+                // Cast Event to TripEvent
                 .map(event -> (TripEvent) event)
-                //remove all events with geo coordinates outside of NYC
+                // Remove all events with geo coordinates outside of NYC
                 .filter(GeoUtils::hasValidCoordinates);
 
 
-        //print trip events to stdout
+        // Print trip events to stdout
         trips.print();
 
 
