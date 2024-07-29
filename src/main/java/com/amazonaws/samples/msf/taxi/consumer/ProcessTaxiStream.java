@@ -61,10 +61,10 @@ public class ProcessTaxiStream {
         ParameterTool parameter;
 
         if (env instanceof LocalStreamEnvironment) {
-            // read the parameters specified from the command line
+            // Read the parameters specified from the command line
             parameter = ParameterTool.fromArgs(args);
         } else {
-            // read the parameters from the Kinesis Analytics environment
+            // Read the parameters from the Kinesis Analytics environment
             Map<String, Properties> applicationProperties = KinesisAnalyticsRuntime.getApplicationProperties();
 
             Properties flinkProperties = applicationProperties.get("FlinkApplicationProperties");
@@ -130,9 +130,9 @@ public class ProcessTaxiStream {
                         return Tuple2.of(item.pickupGeoHash, item.airportCode);
                     }
                 })
-                //(3) collect all trip durations in the one hour window
+                // (3) collect all trip durations in the one hour window
                 .window(TumblingEventTimeWindows.of(Time.hours(1)))
-                //(4) calculate average trip duration, per pickup geo hash and destination airport, in the one hour window
+                // (4) calculate average trip duration, per pickup geo hash and destination airport, in the one hour window
                 .apply(new TripDurationToAverageTripDuration());
 
 
