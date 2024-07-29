@@ -29,8 +29,9 @@
         <maven.compiler.source>${target.java.version}</maven.compiler.source>
         <maven.compiler.target>${target.java.version}</maven.compiler.target>
 
-        <flink.version>1.15.2</flink.version>
+        <flink.version>1.19.1</flink.version>
         <aws.kda.version>1.2.0</aws.kda.version>
+        <aws.connectors.version>4.3.0-1.19</aws.connectors.version>
         <log4j.version>2.17.1</log4j.version>
     </properties>
 
@@ -56,20 +57,38 @@
 
         <dependency>
             <groupId>org.apache.flink</groupId>
-            <artifactId>flink-connector-kinesis</artifactId>
+            <artifactId>flink-connector-base</artifactId>
             <version>${flink.version}</version>
         </dependency>
 
         <dependency>
             <groupId>org.apache.flink</groupId>
-            <artifactId>flink-connector-elasticsearch7</artifactId>
-            <version>${flink.version}</version>
+            <artifactId>flink-connector-kinesis</artifactId>
+            <version>${aws.connectors.version}</version>
         </dependency>
 
+
+
+
         <dependency>
-            <groupId>vc.inreach.aws</groupId>
-            <artifactId>aws-signing-request-interceptor</artifactId>
-            <version>0.0.22</version>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-connector-opensearch</artifactId>
+            <version>1.2.0-1.19</version>
+        </dependency>
+        <dependency>
+            <groupId>org.opensearch.client</groupId>
+            <artifactId>opensearch-rest-high-level-client</artifactId>
+            <version>2.5.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.opensearch</groupId>
+            <artifactId>opensearch</artifactId>
+            <version>2.5.0</version>
+        </dependency>
+        <dependency>
+            <groupId>io.github.acm19</groupId>
+            <artifactId>aws-request-signing-apache-interceptor</artifactId>
+            <version>2.3.1</version>
         </dependency>
 
         <dependency>
