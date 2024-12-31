@@ -16,28 +16,23 @@
 package com.amazonaws.samples.msf.taxi.consumer;
 
 import com.amazonaws.samples.msf.taxi.consumer.events.EventDeserializationSchema;
+import com.amazonaws.samples.msf.taxi.consumer.events.TimestampAssigner;
 import com.amazonaws.samples.msf.taxi.consumer.events.kinesis.Event;
 import com.amazonaws.samples.msf.taxi.consumer.events.kinesis.TripEvent;
 import com.amazonaws.samples.msf.taxi.consumer.utils.GeoUtils;
+import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.java.utils.ParameterTool;
-import org.apache.flink.kinesis.shaded.com.amazonaws.regions.Regions;
+import org.apache.flink.connector.kinesis.source.KinesisStreamsSource;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.connectors.kinesis.FlinkKinesisConsumer;
-import org.apache.flink.streaming.connectors.kinesis.config.AWSConfigConstants;
-import org.apache.flink.streaming.connectors.kinesis.config.ConsumerConfigConstants;
+import org.apache.flink.streaming.runtime.operators.util.AssignerWithPunctuatedWatermarksAdapter;
+import org.apache.flink.util.Preconditions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.util.Properties;
 
 
 public class ProcessTaxiStreamLocal {
     private static final Logger LOG = LoggerFactory.getLogger(ProcessTaxiStreamLocal.class);
-
-    private static final String DEFAULT_STREAM_NAME = "managed-flink-workshop";
-    private static final String DEFAULT_REGION_NAME = Regions.getCurrentRegion() == null ? "us-west-1" : Regions.getCurrentRegion().getName();
-
 
     public static void main(String[] args) throws Exception {
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
@@ -46,27 +41,31 @@ public class ProcessTaxiStreamLocal {
         // Read the parameters specified from the command line
         ParameterTool parameter = ParameterTool.fromArgs(args);
 
+        /// Add the Kinesis source
 
-        Properties kinesisConsumerConfig = new Properties();
-        // Set the region the Kinesis stream is located in
-        kinesisConsumerConfig.setProperty(AWSConfigConstants.AWS_REGION, parameter.get("Region", DEFAULT_REGION_NAME));
-        // Obtain credentials through the DefaultCredentialsProviderChain, which includes credentials from the instance metadata
-        kinesisConsumerConfig.setProperty(AWSConfigConstants.AWS_CREDENTIALS_PROVIDER, "AUTO");
-        // Poll new events from the Kinesis stream once every second
-        kinesisConsumerConfig.setProperty(ConsumerConfigConstants.SHARD_GETRECORDS_INTERVAL_MILLIS, "1000");
+        // Input stream ARN
+        String streamArn = parameter.get("InputStreamArn");
+        Preconditions.checkNotNull(streamArn, "InputStreamArn configuration parameter not defined");
 
-
-        // Create Kinesis source
-        DataStream<Event> kinesisStream = env.addSource(new FlinkKinesisConsumer<>(
+        // Create the Kinesis source
+        KinesisStreamsSource<Event> kinesisSource = KinesisStreamsSource.<Event>builder()
                 // Read events from the Kinesis stream passed in as a parameter
-                parameter.get("InputStreamName", DEFAULT_STREAM_NAME),
-                // Deserialize events with EventSchema
-                new EventDeserializationSchema(),
-                // Using the previously defined Kinesis consumer properties
-                kinesisConsumerConfig
-        ));
+                .setStreamArn(streamArn)
+                // Deserialize events
+                .setDeserializationSchema(new EventDeserializationSchema())
+                .build();
+
+        // Attach Kinesis source to the dataflow
+        DataStream<Event> kinesisStream = env.fromSource(
+                        kinesisSource,
+                        // Extract watermarks from watermark events
+                        WatermarkStrategy.<Event>forGenerator(new AssignerWithPunctuatedWatermarksAdapter.Strategy<Event>(new TimestampAssigner()))
+                                .withTimestampAssigner((event, ts) -> event.getTimestamp()),
+                        "Kinesis source")
+                .returns(Event.class);
 
 
+        // Retain only trip events within NYC
         DataStream<TripEvent> trips = kinesisStream
                 // Remove all events that aren't TripEvents
                 .filter(event -> TripEvent.class.isAssignableFrom(event.getClass()))
@@ -79,9 +78,9 @@ public class ProcessTaxiStreamLocal {
         // Print trip events to stdout
         trips.print();
 
+        LOG.info("Reading events from Kinesis stream {}", streamArn);
 
-        LOG.info("Reading events from stream {}", parameter.get("InputStreamName", DEFAULT_STREAM_NAME));
-
+        // Execute the dataflow
         env.execute();
     }
 }
