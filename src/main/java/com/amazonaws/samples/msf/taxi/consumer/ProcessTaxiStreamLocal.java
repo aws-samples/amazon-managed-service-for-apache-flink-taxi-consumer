@@ -16,8 +16,6 @@
 package com.amazonaws.samples.msf.taxi.consumer;
 
 import com.amazonaws.samples.msf.taxi.consumer.events.EventDeserializationSchema;
-import com.amazonaws.samples.msf.taxi.consumer.events.TimestampAssigner;
-import com.amazonaws.samples.msf.taxi.consumer.events.kinesis.Event;
 import com.amazonaws.samples.msf.taxi.consumer.events.kinesis.TripEvent;
 import com.amazonaws.samples.msf.taxi.consumer.utils.GeoUtils;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
@@ -25,10 +23,11 @@ import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.connector.kinesis.source.KinesisStreamsSource;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.runtime.operators.util.AssignerWithPunctuatedWatermarksAdapter;
 import org.apache.flink.util.Preconditions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.time.Duration;
 
 
 public class ProcessTaxiStreamLocal {
@@ -48,7 +47,7 @@ public class ProcessTaxiStreamLocal {
         Preconditions.checkNotNull(streamArn, "InputStreamArn configuration parameter not defined");
 
         // Create the Kinesis source
-        KinesisStreamsSource<Event> kinesisSource = KinesisStreamsSource.<Event>builder()
+        KinesisStreamsSource<TripEvent> kinesisSource = KinesisStreamsSource.<TripEvent>builder()
                 // Read events from the Kinesis stream passed in as a parameter
                 .setStreamArn(streamArn)
                 // Deserialize events
@@ -56,21 +55,18 @@ public class ProcessTaxiStreamLocal {
                 .build();
 
         // Attach Kinesis source to the dataflow
-        DataStream<Event> kinesisStream = env.fromSource(
+        DataStream<TripEvent> kinesisStream = env.fromSource(
                         kinesisSource,
-                        // Extract watermarks from watermark events
-                        WatermarkStrategy.<Event>forGenerator(new AssignerWithPunctuatedWatermarksAdapter.Strategy<Event>(new TimestampAssigner()))
-                                .withTimestampAssigner((event, ts) -> event.getTimestamp()),
+                        // Create watermarks delayed by 2 minutes, to allow for out-of-order events
+                        WatermarkStrategy.<TripEvent>forBoundedOutOfOrderness(Duration.ofMinutes(2))
+                                // Event-time is dropoff time
+                                .withTimestampAssigner((event, ts) -> event.dropoffDatetime.toEpochMilli()),
                         "Kinesis source")
-                .returns(Event.class);
+                .returns(TripEvent.class);
 
 
         // Retain only trip events within NYC
         DataStream<TripEvent> trips = kinesisStream
-                // Remove all events that aren't TripEvents
-                .filter(event -> TripEvent.class.isAssignableFrom(event.getClass()))
-                // Cast Event to TripEvent
-                .map(event -> (TripEvent) event)
                 // Remove all events with geo coordinates outside of NYC
                 .filter(GeoUtils::hasValidCoordinates);
 
