@@ -15,8 +15,7 @@
 
 package com.amazonaws.samples.msf.taxi.consumer.events;
 
-import com.amazonaws.samples.msf.taxi.consumer.events.kinesis.Event;
-import com.amazonaws.samples.msf.taxi.consumer.events.kinesis.WatermarkEvent;
+import com.amazonaws.samples.msf.taxi.consumer.events.kinesis.TripEvent;
 import org.apache.flink.api.common.serialization.AbstractDeserializationSchema;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.java.typeutils.TypeExtractor;
@@ -26,35 +25,29 @@ import org.slf4j.LoggerFactory;
 import java.nio.charset.StandardCharsets;
 
 
-public class EventDeserializationSchema extends AbstractDeserializationSchema<Event> {
+public class EventDeserializationSchema extends AbstractDeserializationSchema<TripEvent> {
 
-  private static final Logger LOG = LoggerFactory.getLogger(EventDeserializationSchema.class);
+    private static final Logger LOG = LoggerFactory.getLogger(EventDeserializationSchema.class);
 
-  @Override
-  public Event deserialize(byte[] bytes) {
-    try {
-      Event event = Event.parseEvent(bytes);
+    @Override
+    public TripEvent deserialize(byte[] bytes) {
+        try {
+            return TripEvent.parseEvent(bytes);
+        } catch (Exception e) {
+            LOG.debug("cannot parse event '{}'", new String(bytes, StandardCharsets.UTF_8), e);
 
-      if (event instanceof WatermarkEvent) {
-        LOG.debug("parsed WatermarkEvent: {}", ((WatermarkEvent) event).watermark);
-      }
-
-      return event;
-    } catch (Exception e) {
-      LOG.debug("cannot parse event '{}'", new String(bytes, StandardCharsets.UTF_8), e);
-
-      return null;
+            return null;
+        }
     }
-  }
 
-  @Override
-  public boolean isEndOfStream(Event event) {
-    return false;
-  }
+    @Override
+    public boolean isEndOfStream(TripEvent event) {
+        return false;
+    }
 
-  @Override
-  public TypeInformation<Event> getProducedType() {
-    return TypeExtractor.getForClass(Event.class);
-  }
+    @Override
+    public TypeInformation<TripEvent> getProducedType() {
+        return TypeExtractor.getForClass(TripEvent.class);
+    }
 
 }
