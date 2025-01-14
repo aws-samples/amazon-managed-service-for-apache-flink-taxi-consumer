@@ -58,7 +58,7 @@ public class AmazonOpenSearchServiceSink {
         return new OpensearchSinkBuilder<IN>()
                 .setHosts(new HttpHost(host, 443, "https"))
                 .setAllowInsecure(true)
-                .setBulkFlushMaxActions(1) // disable bulk writes for simplicity
+                .setBulkFlushInterval(1000L) // enable bulk writes: flush every 1 sec
                 .setRestClientFactory(clientFactory)
                 .setEmitter((element, ctx, indexer) ->
                         indexer.add(createIndexRequest(element.toString(), index)))
