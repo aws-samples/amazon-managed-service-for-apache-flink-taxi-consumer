@@ -35,7 +35,7 @@
         <opensearch.connector.version>1.2.0-1.19</opensearch.connector.version>
         <opensearch.client.version>2.5.0</opensearch.client.version>
         <http-request-signing-interceptor.version>2.3.1</http-request-signing-interceptor.version>
-        <log4j.version>2.24.3</log4j.version>
+        <log4j.version>2.25.3</log4j.version>
         <aws.sdk2.version>2.28.28</aws.sdk2.version>
     </properties>
 
