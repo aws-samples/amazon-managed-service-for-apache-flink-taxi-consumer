@@ -15,6 +15,12 @@ By default, [Kinesis Data Replay](https://github.com/aws-samples/amazon-kinesis-
 taxi trips that made in New York City into a Kinesis Data Stream.
 Data are based on a public dataset, also [available from the Registry of Open Data on AWS](https://registry.opendata.aws/nyc-tlc-trip-records-pds/).
 
+## Flink SQL and Table API examples
+
+The [`flink_sql`](src/main/java/com/amazonaws/samples/msf/taxi/consumer/flink_sql) package contains nine progressive Flink SQL / Table API examples
+(window TVFs, joins, MATCH_RECOGNIZE, Top-N, UDFs, state TTL) that run locally in IntelliJ against the same taxi stream.
+See [FLINK_SQL_README.md](FLINK_SQL_README.md) for the walkthrough.
+
 ## Amazon Managed Service for Apache Flink workshop
 
 An end-to-end workshop, to learn how to modify and build this Flink application, deploy it on Amazon Managed Service for Apache Flink, 
