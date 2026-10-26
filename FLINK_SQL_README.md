@@ -51,33 +51,35 @@ This replays one hour of historic NYC taxi trip data per second. Keep the produc
 
 3. **Open in IntelliJ**
 - File → Open → Select `pom.xml`
-- Wait for Maven import and indexing
-- Activate the `add-dependencies-for-IDEA` Maven profile (required for Table API classes)
-- Right-click any example → Run
-- Edit the run configuration and pass your stream as a program argument (required — the examples fail fast without it):
+- Wait for Maven import and indexing. IntelliJ activates the `add-dependencies-for-IDEA` Maven profile automatically, which puts the Flink runtime and Table API on the run classpath.
+- Create **one** Application run configuration for `com.amazonaws.samples.msf.taxi.consumer.flink_sql.FlinkSqlLab`. It is a launcher for all nine examples: you switch examples by changing the program arguments only.
+- Program arguments:
   ```
-  --InputStreamArn arn:aws:kinesis:<region>:<account-id>:stream/<stream-name>
+  --InputStreamArn arn:aws:kinesis:<region>:<account-id>:stream/<stream-name> --example table-env
   ```
   Make sure your AWS credentials and region (for example `AWS_PROFILE` and `AWS_REGION`) are available to the run configuration.
+- If you see `No ExecutorFactory found to execute the application` or `NoClassDefFoundError`, reload the Maven project, or select **Modify options → Add dependencies with "provided" scope to classpath** in the run configuration.
 
 4. **Access Web UI**
 ```
 http://localhost:8081
 ```
 
-5. **Choose the query with `--query`**
+5. **Choose the example with `--example` and the query with `--query`**
 
-Most examples contain several queries, and one query runs per job. Pick it with the `--query` program argument in the run configuration, for example `--InputStreamArn <arn> --query hop`. Without `--query` the first query runs; an unknown value fails fast and lists the valid names.
+`--example` picks the example class; `--query` picks one query inside it (one query runs per job). For example `--InputStreamArn <arn> --example windows --query hop` runs the `hop` case of `WindowTvfExample`. Without `--query` the first query runs; an unknown value fails fast and lists the valid names. You can still run any example class directly with its own run configuration; `--example` is then ignored.
 
-| Example | `--query` values (first is the default) |
-|---|---|
-| `SqlDmlAggregationsExample` | `filter`, `group-by`, `having`, `distinct` |
-| `WindowTvfExample` | `tumble`, `hop`, `cumulate` |
-| `SqlJoinsExample` | `inner`, `left-outer`, `interval`, `temporal` |
-| `MatchRecognizeExample` | `surge`, `v-shape`, `high-value-streak`, `spike-plateau`, `fare-drop` |
-| `TopNDeduplicationExample` | `top-n`, `dedup` |
-| `UdfExample` | `geohash`, `zone-split`, `weighted-avg` |
-| `SqlOptimizationExample` | `ttl-hint` (default), `global-ttl-minibatch`, `ttl-hint-join`, `no-minibatch` |
+| `--example` | Class | `--query` values (first is the default) |
+|---|---|---|
+| `table-env` | `TableEnvSetupExample` | – |
+| `ddl` | `SqlDdlExample` | – |
+| `aggregations` | `SqlDmlAggregationsExample` | `filter`, `group-by`, `having`, `distinct` |
+| `windows` | `WindowTvfExample` | `tumble`, `hop`, `cumulate` |
+| `joins` | `SqlJoinsExample` | `inner`, `left-outer`, `interval`, `temporal` |
+| `match-recognize` | `MatchRecognizeExample` | `surge`, `v-shape`, `high-value-streak`, `spike-plateau`, `fare-drop` |
+| `topn-dedup` | `TopNDeduplicationExample` | `top-n`, `dedup` |
+| `udf` | `UdfExample` | `geohash`, `zone-split`, `weighted-avg` |
+| `optimization` | `SqlOptimizationExample` | `ttl-hint`, `global-ttl-minibatch`, `ttl-hint-join`, `no-minibatch` |
 
 ### Workshop Progression
 1. Start with `TableEnvSetupExample` — Foundation: bridge DataStream and Table APIs
